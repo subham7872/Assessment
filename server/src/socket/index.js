@@ -15,10 +15,32 @@ const handleSocketError = (socket, error) => {
   socket.emit('project:error', { message });
 };
 
+const getAllowedOrigins = () => {
+  const envOrigins = (process.env.CLIENT_URL || '')
+    .split(',')
+    .map((url) => url.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
+  const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  return Array.from(new Set([...envOrigins, ...defaultOrigins]));
+};
+
+const checkCorsOrigin = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  const allowed = getAllowedOrigins();
+  const normalizedOrigin = origin.replace(/\/$/, '');
+
+  if (allowed.includes(normalizedOrigin) || allowed.includes('*')) {
+    callback(null, true);
+  } else {
+    callback(new Error(`CORS policy error: Origin ${origin} not allowed`));
+  }
+};
+
 const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || '*',
+      origin: checkCorsOrigin,
       credentials: true,
     },
   });
