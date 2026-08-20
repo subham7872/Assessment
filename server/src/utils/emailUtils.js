@@ -69,13 +69,8 @@ const sendEmail = async ({ to, subject, html, type = 'transactional' }) => {
     return { messageId: 'simulated-email-id', accepted: [to], rejected: [] };
   }
 
-  const apiKey = (
-    process.env.BREVO_API_KEY ||
-    (process.env.EMAIL_PROVIDER === 'brevo_api' ? process.env.SMTP_PASS : '') ||
-    (process.env.NODE_ENV === 'production' ? process.env.SMTP_PASS : '')
-  ).trim();
-
-  const useBrevoApi = !!apiKey || process.env.EMAIL_PROVIDER === 'brevo_api' || process.env.NODE_ENV === 'production';
+  const apiKey = (process.env.BREVO_API_KEY || process.env.SMTP_PASS || '').trim();
+  const useBrevoApi = !!apiKey || process.env.EMAIL_PROVIDER === 'brevo_api';
 
   if (useBrevoApi) {
     if (!apiKey) {
