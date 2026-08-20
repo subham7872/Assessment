@@ -1,6 +1,6 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { FolderKanban, LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useAuthStore from '../store/authStore';
@@ -8,6 +8,7 @@ import { getErrorMessage } from '../utils/formatters';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const login = useAuthStore((state) => state.login);
   const isLoading = useAuthStore((state) => state.isLoading);
 
@@ -21,7 +22,12 @@ const Login = () => {
     try {
       await login(data);
       toast.success('Logged in successfully!');
-      navigate('/projects');
+      
+      const pendingInvite = sessionStorage.getItem('pending_invite_path');
+      const fromPath = pendingInvite || location.state?.from?.pathname || '/projects';
+      sessionStorage.removeItem('pending_invite_path');
+
+      navigate(fromPath, { replace: true });
     } catch (err) {
       toast.error(getErrorMessage(err));
     }

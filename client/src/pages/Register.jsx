@@ -1,6 +1,6 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { FolderKanban, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useAuthStore from '../store/authStore';
@@ -8,6 +8,7 @@ import { getErrorMessage } from '../utils/formatters';
 
 const Register = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const registerUser = useAuthStore((state) => state.register);
   const isLoading = useAuthStore((state) => state.isLoading);
 
@@ -28,7 +29,12 @@ const Register = () => {
         password: data.password,
       });
       toast.success('Account created successfully!');
-      navigate('/projects');
+      
+      const pendingInvite = sessionStorage.getItem('pending_invite_path');
+      const fromPath = pendingInvite || location.state?.from?.pathname || '/projects';
+      sessionStorage.removeItem('pending_invite_path');
+
+      navigate(fromPath, { replace: true });
     } catch (err) {
       toast.error(getErrorMessage(err));
     }

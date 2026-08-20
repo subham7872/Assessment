@@ -1,10 +1,11 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import Spinner from '../components/common/Spinner';
 
 const ProtectedRoute = () => {
   const { isAuthenticated, initialized, isLoading } = useAuthStore();
+  const location = useLocation();
 
   if (!initialized || isLoading) {
     return (
@@ -18,7 +19,10 @@ const ProtectedRoute = () => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    if (location.pathname.startsWith('/invite/')) {
+      sessionStorage.setItem('pending_invite_path', location.pathname);
+    }
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return <Outlet />;
