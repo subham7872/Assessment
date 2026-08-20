@@ -3,13 +3,14 @@ const logger = require('./logger');
 
 const createTransporter = () => {
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const isSecure = port === 465 || String(process.env.SMTP_PORT).trim() === '465';
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+    host: (process.env.SMTP_HOST || 'smtp-relay.brevo.com').trim(),
     port,
-    secure: port === 465,
+    secure: isSecure,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: (process.env.SMTP_USER || '').trim(),
+      pass: (process.env.SMTP_PASS || '').trim(),
     },
     tls: {
       rejectUnauthorized: false,
