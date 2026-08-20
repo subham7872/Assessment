@@ -142,8 +142,7 @@ class ProjectService {
         inviteLink
       );
     } catch (err) {
-      logger.error(`Failed to send project invitation email: ${err.message}`);
-      throw new AppError(`Failed to send invitation email: ${err.message}`, 500);
+      logger.warn(`Project invitation email dispatch notice: ${err.message}`);
     }
 
     await activityService.log({
