@@ -30,11 +30,15 @@ const verifyEmailTransport = async () => {
     return true;
   }
 
-  const isBrevoApi = process.env.EMAIL_PROVIDER === 'brevo_api' || !!process.env.BREVO_API_KEY;
+  const isBrevoApi =
+    process.env.EMAIL_PROVIDER === 'brevo_api' ||
+    !!process.env.BREVO_API_KEY ||
+    (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('xkeysib-'));
+
   if (isBrevoApi) {
-    if (!process.env.BREVO_API_KEY) {
-      logger.error('EMAIL BREVO HTTP API FAILED: BREVO_API_KEY is missing');
-      console.error('EMAIL BREVO HTTP API FAILED: BREVO_API_KEY is missing');
+    const key = (process.env.BREVO_API_KEY || process.env.SMTP_PASS || '').trim();
+    if (!key || key === 'your_brevo_smtp_password_here') {
+      logger.warn('EMAIL BREVO HTTP API WARNING: BREVO_API_KEY is not configured');
       return false;
     }
     logger.info('EMAIL BREVO HTTP API TRANSPORT READY');
@@ -65,13 +69,18 @@ const sendEmail = async ({ to, subject, html, type = 'transactional' }) => {
     return { messageId: 'simulated-email-id', accepted: [to], rejected: [] };
   }
 
-  const useBrevoApi = process.env.EMAIL_PROVIDER === 'brevo_api' || !!process.env.BREVO_API_KEY;
+  const apiKey = (
+    process.env.BREVO_API_KEY ||
+    (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('xkeysib-') ? process.env.SMTP_PASS : '') ||
+    (process.env.EMAIL_PROVIDER === 'brevo_api' ? process.env.SMTP_PASS : '')
+  ).trim();
+
+  const useBrevoApi = !!apiKey || process.env.EMAIL_PROVIDER === 'brevo_api';
 
   if (useBrevoApi) {
-    const apiKey = (process.env.BREVO_API_KEY || '').trim();
     if (!apiKey) {
       logger.error(`Brevo HTTP API Error: BREVO_API_KEY is missing (Recipient: ${to})`);
-      throw new Error('BREVO_API_KEY environment variable is not configured');
+      throw new Error('BREVO_API_KEY environment variable is missing on Render');
     }
 
     const senderEmail = (process.env.SMTP_FROM || 'pintuduttafkt@gmail.com').trim();
