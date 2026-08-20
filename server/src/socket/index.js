@@ -21,7 +21,11 @@ const getAllowedOrigins = () => {
     .map((url) => url.trim().replace(/\/$/, ''))
     .filter(Boolean);
 
-  const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  const defaultOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://assessment-sooty-omega.vercel.app',
+  ];
   return Array.from(new Set([...envOrigins, ...defaultOrigins]));
 };
 
@@ -30,11 +34,15 @@ const checkCorsOrigin = (origin, callback) => {
   const allowed = getAllowedOrigins();
   const normalizedOrigin = origin.replace(/\/$/, '');
 
-  if (allowed.includes(normalizedOrigin) || allowed.includes('*')) {
-    callback(null, true);
-  } else {
-    callback(new Error(`CORS policy error: Origin ${origin} not allowed`));
+  if (allowed.includes(normalizedOrigin) || allowed.includes('*') || process.env.NODE_ENV !== 'production') {
+    return callback(null, true);
   }
+
+  if (normalizedOrigin.endsWith('.vercel.app') || normalizedOrigin.endsWith('.onrender.com')) {
+    return callback(null, true);
+  }
+
+  return callback(null, true);
 };
 
 const initSocket = (httpServer) => {
