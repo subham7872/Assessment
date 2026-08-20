@@ -15,19 +15,30 @@ const createTransporter = () => {
     tls: {
       rejectUnauthorized: false,
     },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 };
 
 const verifyEmailTransport = async () => {
   if (
     process.env.NODE_ENV === 'test' ||
-    !process.env.SMTP_PASS ||
-    process.env.SMTP_PASS === 'your_brevo_smtp_password_here'
+    (!process.env.SMTP_PASS && !process.env.BREVO_API_KEY)
   ) {
-    logger.info('Email SMTP transport running in simulation mode');
+    logger.info('Email transport running in simulation mode');
+    return true;
+  }
+
+  const isBrevoApi = process.env.EMAIL_PROVIDER === 'brevo_api' || !!process.env.BREVO_API_KEY;
+  if (isBrevoApi) {
+    if (!process.env.BREVO_API_KEY) {
+      logger.error('EMAIL BREVO HTTP API FAILED: BREVO_API_KEY is missing');
+      console.error('EMAIL BREVO HTTP API FAILED: BREVO_API_KEY is missing');
+      return false;
+    }
+    logger.info('EMAIL BREVO HTTP API TRANSPORT READY');
+    console.log('EMAIL BREVO HTTP API TRANSPORT READY');
     return true;
   }
 
@@ -44,22 +55,72 @@ const verifyEmailTransport = async () => {
   }
 };
 
-const sendEmail = async ({ to, subject, html }) => {
+const sendEmail = async ({ to, subject, html, type = 'transactional' }) => {
   if (
     process.env.NODE_ENV === 'test' ||
-    !process.env.SMTP_PASS ||
+    (!process.env.SMTP_PASS && !process.env.BREVO_API_KEY) ||
     process.env.SMTP_PASS === 'your_brevo_smtp_password_here'
   ) {
     logger.info(`[Email Simulated] To: ${to} | Subject: ${subject}`);
     return { messageId: 'simulated-email-id', accepted: [to], rejected: [] };
   }
 
-  console.log('--- EMAIL DISPATCH STARTED ---');
+  const useBrevoApi = process.env.EMAIL_PROVIDER === 'brevo_api' || !!process.env.BREVO_API_KEY;
+
+  if (useBrevoApi) {
+    const apiKey = (process.env.BREVO_API_KEY || '').trim();
+    if (!apiKey) {
+      logger.error(`Brevo HTTP API Error: BREVO_API_KEY is missing (Recipient: ${to})`);
+      throw new Error('BREVO_API_KEY environment variable is not configured');
+    }
+
+    const senderEmail = (process.env.SMTP_FROM || 'pintuduttafkt@gmail.com').trim();
+    const senderName = (process.env.SMTP_FROM_NAME || 'FlowMatic').trim();
+
+    console.log('--- BREVO HTTP API DISPATCH STARTED ---');
+    console.log(`recipient: ${to}`);
+    console.log(`email type: ${type}`);
+
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        logger.info(`Email (${type}) sent successfully via Brevo HTTP API to ${to} (MessageId: ${data.messageId || 'brevo-sent'})`);
+        console.log('--- BREVO HTTP API DISPATCH SENT ---');
+        console.log(`messageId: ${data.messageId || 'brevo-sent'}`);
+        return { messageId: data.messageId || 'brevo-sent', accepted: [to], rejected: [] };
+      }
+
+      const safeErrorMessage = data.message || data.code || `HTTP ${response.status}`;
+      logger.error(`Brevo HTTP API dispatch failed [Status ${response.status}]: ${safeErrorMessage} (Recipient: ${to}, Type: ${type})`);
+      console.error('--- BREVO HTTP API DISPATCH FAILED ---');
+      console.error(`HTTP Status: ${response.status}`);
+      console.error(`Error Message: ${safeErrorMessage}`);
+      throw new Error(`Brevo HTTP API failed (${response.status}): ${safeErrorMessage}`);
+    } catch (err) {
+      logger.error(`Email dispatch error via Brevo HTTP API to ${to}: ${err.message}`);
+      throw err;
+    }
+  }
+
+  // Fallback to Nodemailer SMTP for local development
+  console.log('--- EMAIL SMTP DISPATCH STARTED ---');
   console.log(`recipient: ${to}`);
-  console.log(`SMTP HOST configured: ${!!process.env.SMTP_HOST}`);
-  console.log(`SMTP PORT configured: ${!!process.env.SMTP_PORT}`);
-  console.log(`SMTP USER configured: ${!!process.env.SMTP_USER}`);
-  console.log(`SMTP PASS configured: ${!!process.env.SMTP_PASS}`);
 
   try {
     const transporter = createTransporter();
@@ -72,18 +133,15 @@ const sendEmail = async ({ to, subject, html }) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    logger.info(`Email sent successfully to ${to} (MessageId: ${info.messageId})`);
-    console.log('--- EMAIL DISPATCH SENT ---');
+    logger.info(`Email (${type}) sent successfully via SMTP to ${to} (MessageId: ${info.messageId})`);
+    console.log('--- EMAIL SMTP DISPATCH SENT ---');
     console.log(`messageId: ${info.messageId}`);
-    console.log(`accepted: ${JSON.stringify(info.accepted)}`);
-    console.log(`rejected: ${JSON.stringify(info.rejected)}`);
     return info;
   } catch (err) {
-    console.error('--- EMAIL DISPATCH FAILED ---');
+    logger.error(`SMTP email dispatch failed to ${to}: ${err.message}`);
+    console.error('--- EMAIL SMTP DISPATCH FAILED ---');
     console.error(`error code: ${err.code || 'UNKNOWN'}`);
-    console.error(`error command: ${err.command || 'UNKNOWN'}`);
     console.error(`error response: ${err.response || err.message}`);
-    logger.error(`Email dispatch failed to ${to}: ${err.message}`);
     throw err;
   }
 };
@@ -97,7 +155,7 @@ const sendPasswordResetEmail = async (to, resetToken) => {
     <p><a href="${resetUrl}" target="_blank">Reset Password</a></p>
     <p>If you did not request this, please ignore this email.</p>
   `;
-  return await sendEmail({ to, subject, html });
+  return await sendEmail({ to, subject, html, type: 'password_reset' });
 };
 
 const sendProjectInviteEmail = async (to, inviterName, projectName, inviteLink) => {
@@ -107,7 +165,7 @@ const sendProjectInviteEmail = async (to, inviterName, projectName, inviteLink) 
     <p><strong>${inviterName}</strong> has invited you to join the project <strong>${projectName}</strong>.</p>
     <p><a href="${inviteLink}" target="_blank">Accept Invitation & Join Project</a></p>
   `;
-  return await sendEmail({ to, subject, html });
+  return await sendEmail({ to, subject, html, type: 'project_invite' });
 };
 
 module.exports = {
