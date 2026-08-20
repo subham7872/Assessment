@@ -14,6 +14,7 @@ const { initSocket } = require('./src/socket');
 const logger = require('./src/utils/logger');
 
 const app = express();
+app.set('trust proxy', 1);
 
 const getAllowedOrigins = () => {
   const envOrigins = (process.env.CLIENT_URL || '')

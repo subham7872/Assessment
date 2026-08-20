@@ -33,7 +33,7 @@ const verifyEmailTransport = async () => {
   const isBrevoApi =
     process.env.EMAIL_PROVIDER === 'brevo_api' ||
     !!process.env.BREVO_API_KEY ||
-    (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('xkeysib-'));
+    process.env.NODE_ENV === 'production';
 
   if (isBrevoApi) {
     const key = (process.env.BREVO_API_KEY || process.env.SMTP_PASS || '').trim();
@@ -71,11 +71,11 @@ const sendEmail = async ({ to, subject, html, type = 'transactional' }) => {
 
   const apiKey = (
     process.env.BREVO_API_KEY ||
-    (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('xkeysib-') ? process.env.SMTP_PASS : '') ||
-    (process.env.EMAIL_PROVIDER === 'brevo_api' ? process.env.SMTP_PASS : '')
+    (process.env.EMAIL_PROVIDER === 'brevo_api' ? process.env.SMTP_PASS : '') ||
+    (process.env.NODE_ENV === 'production' ? process.env.SMTP_PASS : '')
   ).trim();
 
-  const useBrevoApi = !!apiKey || process.env.EMAIL_PROVIDER === 'brevo_api';
+  const useBrevoApi = !!apiKey || process.env.EMAIL_PROVIDER === 'brevo_api' || process.env.NODE_ENV === 'production';
 
   if (useBrevoApi) {
     if (!apiKey) {
@@ -120,6 +120,11 @@ const sendEmail = async ({ to, subject, html, type = 'transactional' }) => {
       console.error('--- BREVO HTTP API DISPATCH FAILED ---');
       console.error(`HTTP Status: ${response.status}`);
       console.error(`Error Message: ${safeErrorMessage}`);
+
+      if (response.status === 401 || safeErrorMessage.includes('unauthorized') || safeErrorMessage.includes('Key not found')) {
+        throw new Error('Brevo HTTP API key unauthorized. Generate an API Key in Brevo Console (SMTP & API -> API Keys) starting with xkeysib- and set BREVO_API_KEY in Render environment variables.');
+      }
+
       throw new Error(`Brevo HTTP API failed (${response.status}): ${safeErrorMessage}`);
     } catch (err) {
       logger.error(`Email dispatch error via Brevo HTTP API to ${to}: ${err.message}`);
