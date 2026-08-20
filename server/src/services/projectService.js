@@ -4,6 +4,7 @@ const activityService = require('./activityService');
 const emailUtils = require('../utils/emailUtils');
 const AppError = require('../utils/AppError');
 const { emitToProject } = require('../socket/roomManager');
+const logger = require('../utils/logger');
 
 class ProjectService {
   async createProject({ name, description, userId }) {
