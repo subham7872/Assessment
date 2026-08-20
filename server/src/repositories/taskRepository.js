@@ -23,7 +23,11 @@ class TaskRepository {
     const query = { project: projectId };
 
     if (search) {
-      query.$text = { $search: search };
+      const searchRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { title: searchRegex },
+        { description: searchRegex },
+      ];
     }
     if (status) {
       query.status = status;
